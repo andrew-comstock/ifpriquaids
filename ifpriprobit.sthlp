@@ -117,13 +117,33 @@ if it happens to be the {bf:base level} of a factor variable it is reported as
 {cmd:1b.}{it:name} - with no {cmd:o} anywhere, indistinguishable from an
 ordinary base level. Detection by marker would miss precisely the case that
 costs observations. A term is treated as responsible when {it:every}
-observation for which it is non-zero was dropped.
+observation in one of its {bf:level sets} was dropped.
+
+{pstd}
+{bf:Either side of a two-valued covariate can be the culprit}, and the
+coding is not assumed. {helpb probit} names whichever side it is as an
+inequality against the other value - {cmd:hindu != 1 predicts success}
+{cmd:perfectly} for a 0/1 dummy, {cmd:hhsex != 1} for one coded 1/2 - and drops
+the observations on the named side. So for a covariate taking exactly two
+(integer) values in the sample, both level sets are tested. Testing only the
+non-zero side would leave that culprit undetectable, since its own support
+loses nothing; it would also mistake a second dummy nested inside the dropped
+set for the cause. A covariate with more than two values is treated as
+continuous and only its non-zero side is tested.
 
 {pstd}
 Ordinary collinearity also makes {helpb probit} omit a term, but costs no
 observations and leaves no holes, so it fails that test and is correctly left
-alone. Several levels can predict perfectly at once, in which case all of them
-are removed.
+alone. Several terms can predict perfectly at once - on opposite sides, even -
+in which case all of them are removed.
+
+{pstd}
+If the loop cannot rescue a good, the command reports which good, how many
+observations were lost, why it gave up and which covariates were still in that
+good's model, then refits that one probit {bf:with output shown} so
+{helpb probit}'s own note names the perfect predictor. Act on it with
+{cmd:covdrop()}, by removing the covariate from {cmd:covariates()}, or with
+{cmd:exclude()} if the good turns out to be uncensored.
 
 {pstd}
 Factor variables are handled at the {bf:level}. If {cmd:i.zone} is supplied and

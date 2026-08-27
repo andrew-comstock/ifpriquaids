@@ -1,4 +1,4 @@
-*! version 1.0.0  25aug2026
+*! version 1.1.0  27aug2026
 *! ifpriprobit -- first-stage probits for the censored QUAIDS pipeline
 *!
 *! One probit per good of the censoring dummy on log total expenditure and
@@ -139,6 +139,10 @@ program ifpriprobit, eclass
 		local drop`i' ""
 		local nused`i' = 0
 		local pbar`i'  = .
+		local stuck`i' = 0
+		local stuckwhy`i' ""
+		local stuckleft`i' ""
+		local stucknoc`i' ""
 
 		if `isexcl' {
 			tempvar xbv`i'
@@ -206,28 +210,105 @@ program ifpriprobit, eclass
 			* all the dropped observations.  A merely collinear term fails
 			* this test - none of its observations are lost - so it is
 			* correctly left alone.
+			* A two-valued covariate has TWO level sets, and EITHER
+			* can be the perfect predictor.  Stata reports whichever
+			* side it is as an inequality against the other value:
+			*   "hindu != 1 predicts success perfectly"   (hindu 0/1)
+			*   "hhsex != 1 predicts success perfectly"   (hhsex 1/2)
+			* and drops the observations on the named side.  Testing
+			* only the non-zero side leaves that culprit undetectable,
+			* because its own support loses nothing.  Worse, another
+			* dummy nested inside the dropped set (islam==1, all of
+			* which are hindu==0) passes the one-sided test and is
+			* dropped instead, which changes nothing and wastes the
+			* iteration.  Found on WL_out_4_r_nv.dta good 4 (hindu,
+			* coded 0/1) and wl_input.dta good 5 (hhsex, coded 1/2)
+			* on 2026-08-27.
+			*
+			* So do not assume 0/1: take the two values the variable
+			* actually takes in the sample and test both level sets.
+			* A covariate with more than two values is treated as
+			* continuous and only its non-zero side is tested - on a
+			* continuous covariate "== k" is not a level set and
+			* testing it would invite nonsense.  Integer-valued is
+			* required so that the equality tests below are exact.
 			local pick ""
 			foreach t of local covs {
-				* turn a term into an indicator expression:
-				* "2.zone", "1b.zone", "1bno.zone" -> (zone == k)
-				local expr ""
+				local isfv = 0
+				local lev ""
+				local vn  ""
 				if regexm("`t'", "^([0-9]+)[bon]*\.(.+)$") {
+					local isfv = 1
 					local lev = regexs(1)
 					local vn  = regexs(2)
-					local expr "(`vn' == `lev')"
 				}
-				else	local expr "(`t' != 0 & `t' < .)"
 
-				capture quietly count if `touse' & `expr'
-				if _rc continue
-				local supp = r(N)
-				if `supp' == 0 continue
-				quietly count if `lost' & `expr'
-				if r(N) == `supp' local pick `pick' `t'
+				local nsides = 1
+				local val1 ""
+				local val2 ""
+				if !`isfv' {
+					capture quietly summarize `t' if `touse', meanonly
+					if !_rc & r(N) > 0 {
+						local lo = r(min)
+						local hi = r(max)
+						if `lo' < `hi' & `lo' == int(`lo') &     ///
+						   `hi' == int(`hi') {
+							local nn = r(N)
+							quietly count if `touse' &       ///
+							    inlist(`t', `lo', `hi')
+							if r(N) == `nn' {
+								local nsides = 2
+								local val1 = `lo'
+								local val2 = `hi'
+							}
+						}
+					}
+				}
+
+				forvalues side = 1/`nsides' {
+					* turn the term into an indicator expression:
+					* "2.zone", "1b.zone", "1bno.zone" -> (zone == k)
+					if `isfv' {
+						local expr "(`vn' == `lev')"
+					}
+					else if `nsides' == 2 {
+						local vv = cond(`side' == 1,     ///
+						                `val1', `val2')
+						local expr "(`t' == `vv')"
+					}
+					else	local expr "(`t' != 0 & `t' < .)"
+
+					capture quietly count if `touse' & `expr'
+					if _rc continue
+					local supp = r(N)
+					if `supp' == 0 continue
+					quietly count if `lost' & `expr'
+					if r(N) == `supp' {
+						local seen : list posof "`t'" in pick
+						if !`seen' local pick `pick' `t'
+					}
+				}
 			}
 
 			if "`autodrop'" == "noautodrop" | "`pick'" == "" |             ///
 			   `iter' > `maxdrop' {
+				* Give up on this good, but remember enough to say
+				* what happened.  Reporting only "PDF`i' contains a
+				* missing value" hundreds of lines later gives the
+				* user nothing to act on.
+				local stuck`i' = `nmiss'
+				local stuckleft`i' "`covs'"
+				local stucknoc`i' "`nocopt'"
+				if "`autodrop'" == "noautodrop" {
+					local stuckwhy`i' "autodrop is off"
+				}
+				else if `iter' > `maxdrop' {
+					local stuckwhy`i' "maxdrop(`maxdrop') reached"
+				}
+				else {
+					local stuckwhy`i' ///
+					  "no covariate accounts for the dropped observations"
+				}
 				continue, break
 			}
 
@@ -300,6 +381,40 @@ program ifpriprobit, eclass
 	/* ================================================================== *
 	 * Checks carried over from 03_probit.do
 	 * ================================================================== */
+	* Report a good the drop loop could not rescue before falling through to
+	* the generic missing-value checks, so the message names the cause.
+	forvalues i = 1/`n' {
+		if `excl`i'' continue
+		if `stuck`i'' > 0 {
+			local dv : word `i' of `dvars'
+			di as err ""
+			di as err "good `i' (`dv'): probit dropped `stuck`i'' " ///
+			          "observation(s), which would leave"
+			di as err "holes in cdf`i'/pdf`i' and break the demand " ///
+			          "system - `stuckwhy`i''."
+			di as err ""
+			di as err "Covariates still in that good's model:"
+			di as err "    `stuckleft`i''"
+			di as err ""
+			di as err "Remove the offending covariate for this " ///
+			          "good with covdrop(`i': varname), or drop"
+			di as err "it from covariates() altogether, or " ///
+			          "exclude(`i') if the good is uncensored."
+			di as err ""
+			* The drop loop fits quietly, so Stata's own
+			* "predicts ... perfectly" note - the one thing that
+			* names the culprit outright - was suppressed.  Refit
+			* visibly so the user actually sees it.
+			di as txt "Refitting good `i' with output shown; " ///
+			          "Stata's own notes name the culprit:"
+			di as txt ""
+			capture noisily probit `dv' `lnexpenditure'          ///
+			    `stuckleft`i'' if `touse' `wgt',                ///
+			    `stucknoc`i'' `options'
+			exit 498
+		}
+	}
+
 	forvalues i = 1/`n' {
 		quietly count if `touse' & `p'pdf`i' >= .
 		if r(N) > 0 {
