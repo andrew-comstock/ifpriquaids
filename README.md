@@ -15,43 +15,6 @@ demographic shifters, and the number of budgeting stages.
 net install ifpriquaids, from("https://raw.githubusercontent.com/andrew-comstock/ifpriquaids/master/") replace
 ```
 
-Replace `andrew-comstock/ifpriquaids` with the repository, and `master` with the branch if it
-differs. **The trailing slash is required.** If the package files sit in a
-subdirectory rather than the repository root, point at that subdirectory:
-
-```stata
-net install ifpriquaids, from("https://raw.githubusercontent.com/andrew-comstock/ifpriquaids/master/src/") replace
-```
-
-`from()` must be the **raw** content host (`raw.githubusercontent.com`), not
-the ordinary `github.com` page URL, which serves HTML rather than the files.
-
-To install the example and template do-files as well:
-
-```stata
-net get ifpriquaids, replace
-```
-
-These are ancillary files and land in the current working directory, not on the
-ado-path.
-
-To upgrade later, re-run the `net install` with `replace`. To remove:
-
-```stata
-ado uninstall ifpriquaids
-```
-
-### Repository layout
-
-`net install` needs two files beside the code, at whatever URL `from()` points
-to:
-
-- `stata.toc` — lists the packages available at that location
-- `ifpriquaids.pkg` — lists the files in this package
-
-Everything else can be arranged as you like, but the `.ado` and `.sthlp` files
-must sit next to those two.
-
 ## The commands
 
 The pipeline runs in order. Each stage feeds the next.

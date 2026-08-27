@@ -10,7 +10,7 @@
 *!
 *! Returns r(ndropped), r(lo), r(hi).
 
-program _ifpriclean, rclass
+program _ifpriclean, rclass 
 	version 14.0
 
 	syntax varname(numeric) [if], METHod(string) Factor(real)
