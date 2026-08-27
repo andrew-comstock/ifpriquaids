@@ -1,0 +1,6 @@
+v 3
+d IFPRI demand system commands
+d
+d Censored QUAIDS estimation and elasticity construction.
+d
+p ifpriquaids censored QUAIDS demand estimation pipeline

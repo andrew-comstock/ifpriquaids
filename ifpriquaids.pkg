@@ -1,0 +1,46 @@
+v 3
+d ifpriquaids: censored QUAIDS demand estimation pipeline
+d
+d A suite of Stata commands for estimating censored Quadratic Almost Ideal
+d Demand Systems by the Shonkwiler-Yen two-step method, and for turning the
+d estimates into observation-level elasticities.
+d
+d The commands run as a pipeline:
+d
+d   ifpriwl          Working-Leser model for all food (stage 1)
+d   ifpriprobit      first-stage probits giving the cdf and pdf
+d   ifpriquaids      censored QUAIDS, flexible in the number of goods
+d   ifpriquaidselas  conditional expenditure and price elasticities
+d   ifpriunc         unconditional elasticities by multi-stage budgeting
+d   ifpripost        posts elasticity summaries so the chain can be
+d                    bootstrapped for standard errors
+d
+d Homogeneity and symmetry are imposed by construction; adding-up is
+d relaxed by default and available through an option.  The first-stage
+d probits are kept separate from the demand system so that their
+d specification, exclusion restrictions and sample stay under the user's
+d control.
+d
+d Requires Stata 14 or later.
+d
+d Distribution-Date: 20260826
+d
+d Author: Andrew Comstock, IFPRI
+d Support: email a.comstock@cgiar.org
+d
+f ifpriwl.ado
+f ifpriwl.sthlp
+f ifpriprobit.ado
+f ifpriprobit.sthlp
+f ifpriquaids.ado
+f ifpriquaids.sthlp
+f nlsurifpriquaids.ado
+f ifpriquaidselas.ado
+f ifpriquaidselas.sthlp
+f ifpriunc.ado
+f ifpriunc.sthlp
+f ifpripost.ado
+f ifpripost.sthlp
+f _ifpriclean.ado
+f ifpriquaids_example.do
+f ifpri_bootstrap_template.do
