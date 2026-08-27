@@ -180,29 +180,59 @@ program ifpriprobit, eclass
 
 			if `nmiss' == 0 continue, break
 
-			* Observations were lost.  Find the terms Stata marked omitted:
-			* "o.name" for a plain regressor, "#o.name" for a factor level.
-			local bn : colnames e(b)
-			local omit ""
-			foreach cn of local bn {
-				local t ""
-				if substr("`cn'", 1, 2) == "o." {
-					local t = substr("`cn'", 3, .)
-				}
-				else if regexm("`cn'", "^([0-9]+)o\.(.+)$") {
-					local t = regexs(1) + "." + regexs(2)
-				}
-				if "`t'" != "" local omit `omit' `t'
-			}
-			local omit : list omit & covs
+			* Observations were lost.  Identify the culprit from WHICH
+			* observations were dropped, not from Stata's omission markers.
+			*
+			* Marker-based detection does not work here.  A BASE factor
+			* level that predicts perfectly is still reported as "1b.zone",
+			* with no "o" anywhere in the name - indistinguishable from an
+			* ordinary base level - so the one case that matters is exactly
+			* the one that is invisible.  Meanwhile "6o.zone" may be a
+			* merely collinear term that cost no observations at all and
+			* must be left alone.
+			*
+			* Stata drops precisely the observations for which the
+			* offending term is non-zero, so the culprit is the term whose
+			* support within the sample coincides with the set of dropped
+			* observations.
+			tempvar lost
+			capture drop `lost'
+			quietly gen byte `lost' = `touse' & `xb' >= .
 
-			if "`autodrop'" == "noautodrop" | "`omit'" == "" |            ///
+			* A term is responsible when EVERY observation for which it is
+			* non-zero was dropped.  Testing it per term rather than against
+			* the whole dropped set matters: several levels can predict
+			* perfectly at once, in which case no single one accounts for
+			* all the dropped observations.  A merely collinear term fails
+			* this test - none of its observations are lost - so it is
+			* correctly left alone.
+			local pick ""
+			foreach t of local covs {
+				* turn a term into an indicator expression:
+				* "2.zone", "1b.zone", "1bno.zone" -> (zone == k)
+				local expr ""
+				if regexm("`t'", "^([0-9]+)[bon]*\.(.+)$") {
+					local lev = regexs(1)
+					local vn  = regexs(2)
+					local expr "(`vn' == `lev')"
+				}
+				else	local expr "(`t' != 0 & `t' < .)"
+
+				capture quietly count if `touse' & `expr'
+				if _rc continue
+				local supp = r(N)
+				if `supp' == 0 continue
+				quietly count if `lost' & `expr'
+				if r(N) == `supp' local pick `pick' `t'
+			}
+
+			if "`autodrop'" == "noautodrop" | "`pick'" == "" |             ///
 			   `iter' > `maxdrop' {
 				continue, break
 			}
 
-			local covs  : list covs - omit
-			local drop`i' `drop`i'' `omit'
+			local covs  : list covs - pick
+			local drop`i' `drop`i'' `pick'
 			local anydrop = 1
 		}
 
@@ -215,10 +245,23 @@ program ifpriprobit, eclass
 		quietly summarize `dv' if `touse', meanonly
 		local pbar`i' = r(mean)
 
-		* keep this good's coefficients
+		* Keep this good's coefficients.  Strip the b/o/n markers from
+		* factor-variable names first: when a level is dropped for one good
+		* Stata rebases that good's factor, so the same variable can arrive
+		* as "1b.zone" from one probit and "2b.zone" or "3b.zone" from
+		* another.  Carrying those into one name list would declare several
+		* base categories for one factor, which -matrix colnames- rejects
+		* as a base category conflict.
 		tempname b`i'
 		matrix `b`i'' = e(b)
-		local cn`i' : colnames `b`i''
+		local raw : colnames `b`i''
+		local cn`i' ""
+		foreach t of local raw {
+			if regexm("`t'", "^([0-9]+)[bon]+\.(.+)$") {
+				local t = regexs(1) + "." + regexs(2)
+			}
+			local cn`i' `cn`i'' `t'
+		}
 		local allterms : list allterms | cn`i'
 	}
 

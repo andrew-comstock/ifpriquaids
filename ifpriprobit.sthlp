@@ -110,10 +110,20 @@ then reports exactly what it removed, per good, and stores the same in
 {cmd:e(dropped}{it:i}{cmd:)}.
 
 {pstd}
-Detection is by {bf:observations lost}, not by the omission marker alone.
+Detection works from {bf:which observations were dropped}, not from the names
+{helpb probit} gives the omitted terms. That distinction matters. A
+perfectly-predicting covariate is normally reported as {cmd:o.}{it:name}, but
+if it happens to be the {bf:base level} of a factor variable it is reported as
+{cmd:1b.}{it:name} - with no {cmd:o} anywhere, indistinguishable from an
+ordinary base level. Detection by marker would miss precisely the case that
+costs observations. A term is treated as responsible when {it:every}
+observation for which it is non-zero was dropped.
+
+{pstd}
 Ordinary collinearity also makes {helpb probit} omit a term, but costs no
-observations and leaves no holes, so it is left alone - only omissions that
-actually cost observations trigger a refit.
+observations and leaves no holes, so it fails that test and is correctly left
+alone. Several levels can predict perfectly at once, in which case all of them
+are removed.
 
 {pstd}
 Factor variables are handled at the {bf:level}. If {cmd:i.zone} is supplied and
@@ -188,6 +198,16 @@ later given to {helpb ifpriquaids}, since {cmd:cdf}{it:i} is matched to the
 the union of all terms used, with zero where a term was not in that good's
 model and an all-zero row for excluded goods. Keeping them avoids re-running
 the probits when the participation margin is needed.
+
+{pstd}
+Factor-variable column names in {cmd:e(prbeta)} carry no {cmd:b}, {cmd:o} or
+{cmd:n} markers: when a level is dropped for one good, {helpb probit} rebases
+that good's factor, so the same variable would otherwise arrive as
+{cmd:1b.zone} from one equation and {cmd:2b.zone} from another, and one name
+list cannot hold two base categories for one factor. One consequence is worth
+knowing when reading the matrix: a zero may mean either that the term was not
+in that good's model {it:or} that it was the base level, whose coefficient is
+zero by construction. {cmd:e(dropped}{it:i}{cmd:)} distinguishes the two.
 
 {pstd}
 {bf:Weights.} {helpb probit} does not accept {cmd:aweight}s, so neither does
